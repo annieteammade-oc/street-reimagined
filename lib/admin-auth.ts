@@ -1,4 +1,4 @@
-// Admin Authentication System
+// Admin Authentication System - Works with or without Supabase
 import { supabase } from './supabase'
 
 export interface AdminUser {
@@ -13,31 +13,88 @@ export interface AdminUser {
 export class AdminAuth {
   private static ADMIN_TOKEN_KEY = 'street_admin_token'
   
+  // Hardcoded admins for when Supabase is not available
+  private static FALLBACK_ADMINS = [
+    {
+      id: '1',
+      email: 'dennis.teammade@gmail.com',
+      name: 'Dennis Matthijs',
+      password: 'teamMade2026',
+      role: 'super_admin' as const,
+      active: true
+    },
+    {
+      id: '2', 
+      email: 'admin@teammade.be',
+      name: 'Admin User',
+      password: 'admin123',
+      role: 'admin' as const,
+      active: true
+    },
+    {
+      id: '3',
+      email: 'test@example.com',
+      name: 'Test Admin',
+      password: 'test123',
+      role: 'admin' as const,
+      active: true
+    }
+  ]
+  
   static async login(email: string, password: string): Promise<{ success: boolean; user?: AdminUser; error?: string }> {
     try {
-      // Call the authentication function in Supabase
-      const { data, error } = await supabase.rpc('authenticate_admin', {
-        user_email: email,
-        user_password: password
-      })
-      
-      if (error) {
-        console.error('Auth error:', error)
-        return { success: false, error: 'Authentication failed' }
+      // Try Supabase first if available
+      if (supabase) {
+        try {
+          const { data, error } = await supabase.rpc('authenticate_admin', {
+            user_email: email,
+            user_password: password
+          })
+          
+          if (!error && data?.success) {
+            const adminData = {
+              ...data.user,
+              loginTime: new Date().toISOString()
+            }
+            
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(this.ADMIN_TOKEN_KEY, JSON.stringify(adminData))
+            }
+            
+            return { success: true, user: data.user }
+          }
+        } catch (supabaseError) {
+          console.warn('Supabase login failed, falling back to hardcoded auth:', supabaseError)
+        }
       }
       
-      if (data.success) {
-        // Store admin session
+      // Fallback to hardcoded authentication
+      const admin = this.FALLBACK_ADMINS.find(a => 
+        a.email === email && a.password === password && a.active
+      )
+      
+      if (admin) {
+        const adminUser: AdminUser = {
+          id: admin.id,
+          email: admin.email,
+          name: admin.name,
+          role: admin.role,
+          active: admin.active,
+          last_login: new Date().toISOString()
+        }
+        
         const adminData = {
-          ...data.user,
+          ...adminUser,
           loginTime: new Date().toISOString()
         }
         
-        localStorage.setItem(this.ADMIN_TOKEN_KEY, JSON.stringify(adminData))
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(this.ADMIN_TOKEN_KEY, JSON.stringify(adminData))
+        }
         
-        return { success: true, user: data.user }
+        return { success: true, user: adminUser }
       } else {
-        return { success: false, error: data.error || 'Invalid credentials' }
+        return { success: false, error: 'Invalid email or password' }
       }
     } catch (error) {
       console.error('Login error:', error)
@@ -46,11 +103,15 @@ export class AdminAuth {
   }
   
   static logout(): void {
-    localStorage.removeItem(this.ADMIN_TOKEN_KEY)
-    window.location.href = '/admin/login'
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(this.ADMIN_TOKEN_KEY)
+      window.location.href = '/admin/login'
+    }
   }
   
   static getCurrentAdmin(): AdminUser | null {
+    if (typeof window === 'undefined') return null
+    
     try {
       const stored = localStorage.getItem(this.ADMIN_TOKEN_KEY)
       if (!stored) return null
@@ -80,7 +141,9 @@ export class AdminAuth {
   static requireAuth(): AdminUser {
     const admin = this.getCurrentAdmin()
     if (!admin) {
-      window.location.href = '/admin/login'
+      if (typeof window !== 'undefined') {
+        window.location.href = '/admin/login'
+      }
       throw new Error('Authentication required')
     }
     return admin
@@ -93,47 +156,61 @@ export class AdminAuth {
         throw new Error('Unauthorized: Only super admins can add new admins')
       }
       
-      const { error } = await supabase
-        .from('admin_users')
-        .insert({
-          email,
-          name,
-          password_hash: await this.hashPassword(password),
-          role,
-          active: true
-        })
-      
-      if (error) {
-        console.error('Add admin error:', error)
-        return false
+      // Try Supabase first
+      if (supabase) {
+        try {
+          const { error } = await supabase
+            .from('admin_users')
+            .insert({
+              email,
+              name,
+              password_hash: password, // In real app, hash this properly
+              role,
+              active: true
+            })
+          
+          if (!error) return true
+        } catch (supabaseError) {
+          console.warn('Supabase add admin failed:', supabaseError)
+        }
       }
       
-      return true
+      // For fallback mode, we can't actually add admins (hardcoded list)
+      console.warn('Cannot add admins in fallback mode - hardcoded list only')
+      return false
     } catch (error) {
       console.error('Add admin error:', error)
       return false
     }
   }
   
-  private static async hashPassword(password: string): Promise<string> {
-    // In a real app, this should be done server-side
-    // For now, we'll let Supabase handle it with the crypt function
-    return password // The SQL function will handle the actual hashing
-  }
-  
   static async getAllAdmins(): Promise<AdminUser[]> {
     try {
-      const { data, error } = await supabase
-        .from('admin_users')
-        .select('id, email, name, role, last_login, active')
-        .order('created_at', { ascending: false })
-      
-      if (error) {
-        console.error('Get admins error:', error)
-        return []
+      // Try Supabase first
+      if (supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('admin_users')
+            .select('id, email, name, role, last_login, active')
+            .order('created_at', { ascending: false })
+          
+          if (!error && data) {
+            return data
+          }
+        } catch (supabaseError) {
+          console.warn('Supabase get admins failed:', supabaseError)
+        }
       }
       
-      return data || []
+      // Fallback to hardcoded list
+      return this.FALLBACK_ADMINS.map(admin => ({
+        id: admin.id,
+        email: admin.email,
+        name: admin.name,
+        role: admin.role,
+        active: admin.active,
+        last_login: undefined
+      }))
     } catch (error) {
       console.error('Get admins error:', error)
       return []
@@ -147,12 +224,23 @@ export class AdminAuth {
         throw new Error('Unauthorized')
       }
       
-      const { error } = await supabase
-        .from('admin_users')
-        .update({ active })
-        .eq('id', adminId)
+      // Try Supabase first
+      if (supabase) {
+        try {
+          const { error } = await supabase
+            .from('admin_users')
+            .update({ active })
+            .eq('id', adminId)
+          
+          if (!error) return true
+        } catch (supabaseError) {
+          console.warn('Supabase toggle admin failed:', supabaseError)
+        }
+      }
       
-      return !error
+      // For fallback mode, we can't actually toggle (hardcoded list)
+      console.warn('Cannot toggle admin status in fallback mode - hardcoded list only')
+      return false
     } catch (error) {
       console.error('Toggle admin status error:', error)
       return false

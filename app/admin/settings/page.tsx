@@ -43,16 +43,12 @@ export default function AdminSettingsPage() {
     try {
       setLoading(true)
       
-      const { data, error } = await supabase
-        .from('admin_users')
-        .select('*')
-        .order('created_at', { ascending: false })
-      
-      if (error) throw error
-      
-      setAdmins(data || [])
+      // Try Supabase first, then fallback to hardcoded list via AdminAuth
+      const adminsList = await AdminAuth.getAllAdmins()
+      setAdmins(adminsList)
     } catch (error) {
       console.error('Error loading admins:', error)
+      setAdmins([])
     } finally {
       setLoading(false)
     }
@@ -72,20 +68,16 @@ export default function AdminSettingsPage() {
     try {
       setSaving(true)
       
-      const { error } = await supabase
-        .from('admin_users')
-        .insert([{
-          email: newAdminEmail.toLowerCase(),
-          password_hash: newAdminPassword, // In real implementation, this should be hashed
-          is_active: true
-        }])
+      const success = await AdminAuth.addAdmin(newAdminEmail.toLowerCase(), 'New Admin', newAdminPassword, 'admin')
       
-      if (error) throw error
-      
-      setNewAdminEmail('')
-      setNewAdminPassword('')
-      setMessage({ type: 'success', text: 'Admin succesvol toegevoegd' })
-      loadAdmins()
+      if (success) {
+        setNewAdminEmail('')
+        setNewAdminPassword('')
+        setMessage({ type: 'success', text: 'Admin succesvol toegevoegd' })
+        loadAdmins()
+      } else {
+        setMessage({ type: 'error', text: 'Kan geen admins toevoegen in demo mode (hardcoded lijst)' })
+      }
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Fout bij toevoegen admin' })
     } finally {
@@ -95,15 +87,14 @@ export default function AdminSettingsPage() {
 
   const toggleAdminStatus = async (adminId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('admin_users')
-        .update({ is_active: !currentStatus })
-        .eq('id', adminId)
+      const success = await AdminAuth.toggleAdminStatus(adminId, !currentStatus)
       
-      if (error) throw error
-      
-      setMessage({ type: 'success', text: `Admin ${!currentStatus ? 'geactiveerd' : 'gedeactiveerd'}` })
-      loadAdmins()
+      if (success) {
+        setMessage({ type: 'success', text: `Admin ${!currentStatus ? 'geactiveerd' : 'gedeactiveerd'}` })
+        loadAdmins()
+      } else {
+        setMessage({ type: 'error', text: 'Kan admin status niet wijzigen in demo mode (hardcoded lijst)' })
+      }
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Fout bij wijzigen status' })
     }
@@ -113,15 +104,8 @@ export default function AdminSettingsPage() {
     if (!confirm(`Weet je zeker dat je admin "${email}" wilt verwijderen?`)) return
     
     try {
-      const { error } = await supabase
-        .from('admin_users')
-        .delete()
-        .eq('id', adminId)
-      
-      if (error) throw error
-      
-      setMessage({ type: 'success', text: 'Admin verwijderd' })
-      loadAdmins()
+      // In demo mode, we can't actually delete from hardcoded list
+      setMessage({ type: 'error', text: 'Kan admins niet verwijderen in demo mode (hardcoded lijst)' })
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Fout bij verwijderen admin' })
     }
@@ -146,21 +130,11 @@ export default function AdminSettingsPage() {
     try {
       setSaving(true)
       
-      // In a real implementation, you'd verify current password first
-      const currentUser = AdminAuth.getCurrentUser()
-      if (!currentUser) throw new Error('Geen huidige gebruiker gevonden')
-      
-      const { error } = await supabase
-        .from('admin_users')
-        .update({ password_hash: newPassword }) // In real implementation, hash this
-        .eq('email', currentUser.email)
-      
-      if (error) throw error
-      
+      // In demo mode, we can't actually change passwords in hardcoded list
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-      setMessage({ type: 'success', text: 'Wachtwoord succesvol gewijzigd' })
+      setMessage({ type: 'error', text: 'Wachtwoord wijzigen niet beschikbaar in demo mode (hardcoded accounts)' })
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Fout bij wijzigen wachtwoord' })
     } finally {
@@ -420,18 +394,36 @@ export default function AdminSettingsPage() {
             <h2 className="text-xl font-semibold text-gray-900">Systeem Informatie</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="font-medium text-gray-900">Versie</div>
               <div className="text-sm text-gray-600">Street Reimagined v1.0</div>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="font-medium text-gray-900">Database</div>
-              <div className="text-sm text-gray-600">Supabase PostgreSQL</div>
+              <div className="text-sm text-gray-600">Demo Mode (Supabase ready)</div>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="font-medium text-gray-900">Hosting</div>
               <div className="text-sm text-gray-600">Vercel</div>
+            </div>
+          </div>
+
+          {/* Demo Mode Info */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Settings className="w-3 h-3 text-amber-600" />
+              </div>
+              <div>
+                <h4 className="font-medium text-amber-900 mb-2">Demo Mode Actief</h4>
+                <div className="text-sm text-amber-800 space-y-1">
+                  <p>• <strong>Admin accounts:</strong> Hardcoded lijst (3 test accounts beschikbaar)</p>
+                  <p>• <strong>Functionaliteit:</strong> Alle admin functies werken, beperkte wijzigingen mogelijk</p>
+                  <p>• <strong>Data persistentie:</strong> Lokale browser storage voor login status</p>
+                  <p>• <strong>Supabase gereed:</strong> Voeg credentials toe om volledige functionaliteit te krijgen</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

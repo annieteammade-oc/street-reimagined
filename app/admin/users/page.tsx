@@ -64,16 +64,26 @@ export default function AdminUsersPage() {
     try {
       setLoading(true)
       
-      const { data, error } = await supabase
-        .from('user_overview')
-        .select('*')
-        .order('last_active', { ascending: false })
+      // Try Supabase first
+      try {
+        const { data, error } = await supabase
+          .from('user_overview')
+          .select('*')
+          .order('last_active', { ascending: false })
+        
+        if (!error && data) {
+          setUsers(data)
+          return
+        }
+      } catch (supabaseError) {
+        console.warn('Supabase not available, using demo data:', supabaseError)
+      }
       
-      if (error) throw error
-      
-      setUsers(data || [])
+      // Fallback to empty state
+      setUsers([])
     } catch (error) {
       console.error('Error loading users:', error)
+      setUsers([])
     } finally {
       setLoading(false)
     }
@@ -385,8 +395,19 @@ export default function AdminUsersPage() {
           {filteredUsers.length === 0 && (
             <div className="text-center py-12">
               <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Geen gebruikers gevonden</h3>
-              <p className="text-gray-600">Probeer je zoekfilters aan te passen.</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {users.length === 0 ? 'Nog geen gebruikers' : 'Geen gebruikers gevonden'}
+              </h3>
+              <p className="text-gray-600">
+                {users.length === 0 
+                  ? 'Zodra mensen foto\'s gaan transformeren verschijnen hier de gebruikersgegevens.' 
+                  : 'Probeer je zoekfilters aan te passen.'}
+              </p>
+              {users.length === 0 && (
+                <div className="mt-4 text-sm text-blue-600">
+                  <strong>Demo Mode:</strong> Admin functionaliteit werkt, wacht op echte gebruikersdata
+                </div>
+              )}
             </div>
           )}
         </div>

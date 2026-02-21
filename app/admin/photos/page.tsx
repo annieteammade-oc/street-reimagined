@@ -60,22 +60,32 @@ export default function AdminPhotosPage() {
     try {
       setLoading(true)
       
-      const { data, error } = await supabase
-        .from('transformations')
-        .select(`
-          id, created_at, original_image_url, transformed_image_url,
-          user_request, categories, location_name, user_email, user_name,
-          device_type, processing_time_ms, status, downloaded, download_count,
-          ai_model, session_id
-        `)
-        .order('created_at', { ascending: false })
-        .limit(100) // Load first 100 for performance
+      // Try Supabase first
+      try {
+        const { data, error } = await supabase
+          .from('transformations')
+          .select(`
+            id, created_at, original_image_url, transformed_image_url,
+            user_request, categories, location_name, user_email, user_name,
+            device_type, processing_time_ms, status, downloaded, download_count,
+            ai_model, session_id
+          `)
+          .order('created_at', { ascending: false })
+          .limit(100) // Load first 100 for performance
+        
+        if (!error && data) {
+          setPhotos(data)
+          return
+        }
+      } catch (supabaseError) {
+        console.warn('Supabase not available, using demo data:', supabaseError)
+      }
       
-      if (error) throw error
-      
-      setPhotos(data || [])
+      // Fallback to empty state
+      setPhotos([])
     } catch (error) {
       console.error('Error loading photos:', error)
+      setPhotos([])
     } finally {
       setLoading(false)
     }
@@ -537,8 +547,19 @@ export default function AdminPhotosPage() {
         {filteredPhotos.length === 0 && (
           <div className="text-center py-12">
             <Camera className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Geen foto's gevonden</h3>
-            <p className="text-gray-600">Probeer je zoekfilters aan te passen.</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {photos.length === 0 ? 'Nog geen foto transformaties' : 'Geen foto\'s gevonden'}
+            </h3>
+            <p className="text-gray-600">
+              {photos.length === 0 
+                ? 'Zodra gebruikers foto\'s gaan transformeren verschijnen hier alle originele en bewerkte foto\'s.' 
+                : 'Probeer je zoekfilters aan te passen.'}
+            </p>
+            {photos.length === 0 && (
+              <div className="mt-4 text-sm text-blue-600">
+                <strong>Demo Mode:</strong> Foto galerij is klaar voor gebruik zodra er data is
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -29,12 +29,12 @@ export default function AdminLoginPage() {
       const result = await AdminAuth.login(email, password)
       
       if (result.success) {
-        router.push('/admin')
+        router.push('/admin/dashboard')
       } else {
-        setError(result.error || 'Login failed')
+        setError(result.error || 'Ongeldige inloggegevens')
       }
     } catch (err) {
-      setError('Login failed. Please try again.')
+      setError('Inloggen mislukt. Probeer opnieuw.')
     } finally {
       setLoading(false)
     }
@@ -144,12 +144,25 @@ export default function AdminLoginPage() {
           </button>
         </form>
 
-        {/* Default Credentials Info */}
+        {/* Demo Accounts Info */}
         <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="font-semibold text-blue-900 mb-2">🔑 Default Admin Login:</h3>
-          <div className="text-sm text-blue-800 space-y-1">
-            <div><strong>Email:</strong> dennis.teammade@gmail.com</div>
-            <div><strong>Wachtwoord:</strong> TeamMade2024</div>
+          <h3 className="font-semibold text-blue-900 mb-2">🔑 Demo Admin Accounts:</h3>
+          <div className="text-sm text-blue-800 space-y-2">
+            <div className="bg-blue-100 p-2 rounded">
+              <strong>Dennis (Super Admin):</strong><br />
+              dennis.teammade@gmail.com • teamMade2026
+            </div>
+            <div className="bg-blue-100 p-2 rounded">
+              <strong>Admin User:</strong><br />
+              admin@teammade.be • admin123
+            </div>
+            <div className="bg-blue-100 p-2 rounded">
+              <strong>Test Account:</strong><br />
+              test@example.com • test123
+            </div>
+          </div>
+          <div className="mt-2 text-xs text-blue-600">
+            <strong>Demo Mode:</strong> Admin functies werken, beperkte wijzigingsmogelijkheden
           </div>
         </div>
 
