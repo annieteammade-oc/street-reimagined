@@ -29,12 +29,43 @@ Transform your street with AI - Turn parking spots into green spaces, playground
 
 ## Getting Started
 
+### 1. Clone and Install Dependencies
+
 ```bash
+git clone https://github.com/annieteammade-oc/street-reimagined.git
+cd street-reimagined
 npm install
+```
+
+### 2. Setup Supabase Database
+
+1. Create account at [supabase.com](https://supabase.com)
+2. Create new project: `street-reimagined`
+3. Copy Project URL and API keys
+4. Run the SQL schema:
+   - Go to Supabase Dashboard → SQL Editor
+   - Copy/paste content from `supabase-schema.sql`
+   - Run the query to create tables
+
+### 3. Environment Configuration
+
+```bash
+# Copy example environment file
+cp .env.local.example .env.local
+
+# Edit .env.local with your Supabase credentials:
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+### 4. Run Development Server
+
+```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to see the app.
+Open [http://localhost:3000/admin](http://localhost:3000/admin) for analytics dashboard.
 
 ## Why This Matters
 

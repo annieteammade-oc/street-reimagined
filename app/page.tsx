@@ -5,7 +5,7 @@ import { Camera, Mic, MicOff, Download, Sparkles, MapPin, Users } from 'lucide-r
 import ImageUploader from '@/components/ImageUploader'
 import TransformInterface from '@/components/TransformInterface' 
 import ResultDisplay from '@/components/ResultDisplay'
-import Analytics from '@/components/Analytics'
+import { TransformationDB } from '@/lib/supabase'
 
 // Declare Puter global for TypeScript
 declare global {
@@ -62,6 +62,10 @@ export default function HomePage() {
     setUserRequest(request)
     setIsTransforming(true)
 
+    const startTime = Date.now()
+    const sessionId = localStorage.getItem('street-session-id') || crypto.randomUUID()
+    localStorage.setItem('street-session-id', sessionId)
+
     try {
       // Enhanced prompt for better street transformations
       const enhancedPrompt = `Transform this street scene based on the user's request: "${request}". 
@@ -84,20 +88,79 @@ export default function HomePage() {
       setTransformedImage(transformedImg)
       setCurrentStep('result')
 
-      // Send analytics (optional location)
-      await Analytics.trackTransformation({
-        request: request,
-        categories: Analytics.extractCategories(request),
-        location: location,
+      // Calculate processing time
+      const processingTime = Date.now() - startTime
+
+      // Extract categories from request
+      const categories = extractCategories(request)
+
+      // Save to Supabase database
+      await TransformationDB.saveTransformation({
+        userRequest: request,
+        categories: categories,
+        latitude: location?.lat,
+        longitude: location?.lng,
+        aiModel: "gemini-3-pro-image-preview",
+        processingTimeMs: processingTime,
+        sessionId: sessionId
+      })
+
+      // Update session
+      await TransformationDB.upsertSession(sessionId, {
+        userAgent: navigator.userAgent,
         timestamp: new Date().toISOString()
       })
 
+      console.log('✅ Transformation saved to database')
+
     } catch (error) {
       console.error('Transformation failed:', error)
+      
+      // Still try to save failed attempt
+      try {
+        await TransformationDB.saveTransformation({
+          userRequest: request,
+          categories: extractCategories(request),
+          latitude: location?.lat,
+          longitude: location?.lng,
+          aiModel: "gemini-3-pro-image-preview",
+          processingTimeMs: Date.now() - startTime,
+          sessionId: sessionId
+        })
+      } catch (dbError) {
+        console.error('Database save failed:', dbError)
+      }
+      
       alert('Transformatie mislukt. Probeer opnieuw met een andere beschrijving.')
     } finally {
       setIsTransforming(false)
     }
+  }
+
+  // Helper function to extract categories from request
+  const extractCategories = (request: string): string[] => {
+    const categories: string[] = []
+    const lowercaseRequest = request.toLowerCase()
+
+    const patterns = {
+      groen: /\b(groen|boom|bomen|planten?|tuin|park|natuur|bloemen?)\b/g,
+      fiets: /\b(fiets|fietspad|bike|wielr|cycling|fietsenstalling)\b/g,
+      speel: /\b(speel|kind|kinderen|playground|speeltuin|spelen|jeugd)\b/g,
+      social: /\b(terras|cafe|zitten|bankje?|ontmoet|social|gezellig|samen)\b/g,
+      minder_auto: /\b(minder auto|geen auto|parkeren? weg|minder parkeer|auto weg)\b/g
+    }
+
+    Object.entries(patterns).forEach(([category, pattern]) => {
+      if (pattern.test(lowercaseRequest)) {
+        categories.push(category)
+      }
+    })
+
+    if (categories.length === 0) {
+      categories.push('other')
+    }
+
+    return categories
   }
 
   const handleReset = () => {
